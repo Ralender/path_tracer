@@ -8,10 +8,13 @@
 #include <thread>
 #include <vector>
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <stb/stb_image_write.h>
+
 #include "render.hpp"
 
 // Function to save image data in ppm format
-void save_image(int width, int height, auto& fb_data) {
+void dump_image_ppm(int width, int height, auto& fb_data) {
   std::cout << "P3\n" << width << " " << height << "\n255\n";
   for (int y = height - 1; y >= 0; y--) {
     for (int x = 0; x < width; x++) {
@@ -25,6 +28,33 @@ void save_image(int width, int height, auto& fb_data) {
       std::cout << r << " " << g << " " << b << "\n";
     }
   }
+}
+
+void save_image_png(int width, int height, auto &fb_data) {
+  constexpr unsigned num_channels = 3;
+
+  std::vector<uint8_t> pixels;
+  pixels.resize(width * height * num_channels);
+
+  int index = 0;
+  for (int j = height - 1; j >= 0; --j) {
+    for (int i = 0; i < width; ++i) {
+      auto input_index = j * width + i;
+      int r = static_cast<int>(
+          256 * std::clamp(sycl::sqrt(fb_data[input_index].x()), 0.0f, 0.999f));
+      int g = static_cast<int>(
+          256 * std::clamp(sycl::sqrt(fb_data[input_index].y()), 0.0f, 0.999f));
+      int b = static_cast<int>(
+          256 * std::clamp(sycl::sqrt(fb_data[input_index].z()), 0.0f, 0.999f));
+
+      pixels[index++] = r;
+      pixels[index++] = g;
+      pixels[index++] = b;
+    }
+  }
+
+  stbi_write_png("out.png", width, height, num_channels, pixels.data(),
+                 width * num_channels);
 }
 
 int main() {
@@ -101,11 +131,11 @@ int main() {
   hittables.emplace_back(
       sphere(point { 4, 1, 0 }, 0.2f, lightsource_material(color(10, 0, 10))));
 
-  // Four large spheres of metal, dielectric and Lambertian material types
-  t = image_texture("../images/Xilinx.jpg");
-  hittables.emplace_back(xy_rect(2, 4, 0, 1, -1, lambertian_material(t)));
-  hittables.emplace_back(
-      sphere(point { 4, 1, 2.25f }, 1, lambertian_material(t)));
+  // // Four large spheres of metal, dielectric and Lambertian material types
+  // t = image_texture("../images/Xilinx.jpg");
+  // hittables.emplace_back(xy_rect(2, 4, 0, 1, -1, lambertian_material(t)));
+  // hittables.emplace_back(
+  //     sphere(point { 4, 1, 2.25f }, 1, lambertian_material(t)));
   hittables.emplace_back(
       sphere(point { 0, 1, 0 }, 1,
              dielectric_material(1.5f, color { 1.0f, 0.5f, 0.5f })));
@@ -114,11 +144,11 @@ int main() {
   hittables.emplace_back(sphere(point { 0, 1, -2.25f }, 1,
                                 metal_material(color(0.7f, 0.6f, 0.5f), 0.0f)));
 
-  t = image_texture { "../images/SYCL.png", 5 };
+  // t = image_texture { "../images/SYCL.png", 5 };
 
-  // Add a sphere with a SYCL logo in the background
-  hittables.emplace_back(
-      sphere { point { -60, 3, 5 }, 4, lambertian_material { t } });
+  // // Add a sphere with a SYCL logo in the background
+  // hittables.emplace_back(
+  //     sphere { point { -60, 3, 5 }, 4, lambertian_material { t } });
 
   // Add a metallic monolith
   hittables.emplace_back(
@@ -161,7 +191,7 @@ int main() {
   render<width, height, samples>(myQueue, fb, hittables, cam);
 
   // Save image to file
-  save_image(width, height, fb);
+  save_image_png(width, height, fb);
 
   return 0;
 }
